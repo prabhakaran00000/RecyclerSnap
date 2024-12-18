@@ -1,0 +1,314 @@
+class BubbleArrowDrawable(
+    private val arrowOffsetX: Float,
+    private var arrowPosition: ArrowPosition = ArrowPosition.BOTTOM,
+    private val borderColor: Int = Color.RED,
+    private val borderWidth: Float = 8f,
+    private val cornerRadius: Float = 16f
+) : Drawable() {
+
+    enum class ArrowPosition {
+        TOP, BOTTOM
+    }
+
+    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = borderColor
+        style = Paint.Style.STROKE
+        strokeWidth = borderWidth
+    }
+
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
+
+    private val arrowHeight = 20f
+
+    override fun draw(canvas: Canvas) {
+        val arrowWidth = 40f
+        val halfBorderWidth = borderWidth / 2f
+
+        val rectTop = if (arrowPosition == ArrowPosition.TOP) halfBorderWidth + arrowHeight else halfBorderWidth
+        val rectBottom = if (arrowPosition == ArrowPosition.BOTTOM) bounds.height() - halfBorderWidth - arrowHeight else bounds.height() - halfBorderWidth
+        val rectLeft = halfBorderWidth
+        val rectRight = bounds.width() - halfBorderWidth
+
+        val path = Path().apply {
+            when (arrowPosition) {
+                ArrowPosition.TOP -> {
+                    moveTo(rectLeft + cornerRadius, rectTop)
+                    lineTo(arrowOffsetX - arrowWidth / 2, rectTop)
+                    lineTo(arrowOffsetX, rectTop - arrowHeight) // Arrow tip
+                    lineTo(arrowOffsetX + arrowWidth / 2, rectTop)
+                    lineTo(rectRight - cornerRadius, rectTop)
+                    quadTo(rectRight, rectTop, rectRight, rectTop + cornerRadius)
+                    lineTo(rectRight, rectBottom - cornerRadius)
+                    quadTo(rectRight, rectBottom, rectRight - cornerRadius, rectBottom)
+                    lineTo(rectLeft + cornerRadius, rectBottom)
+                    quadTo(rectLeft, rectBottom, rectLeft, rectBottom - cornerRadius)
+                    lineTo(rectLeft, rectTop + cornerRadius)
+                    quadTo(rectLeft, rectTop, rectLeft + cornerRadius, rectTop)
+                }
+
+                ArrowPosition.BOTTOM -> {
+                    moveTo(rectLeft + cornerRadius, rectTop)
+                    lineTo(rectRight - cornerRadius, rectTop)
+                    quadTo(rectRight, rectTop, rectRight, rectTop + cornerRadius)
+                    lineTo(rectRight, rectBottom - cornerRadius)
+                    quadTo(rectRight, rectBottom, rectRight - cornerRadius, rectBottom)
+                    lineTo(arrowOffsetX + arrowWidth / 2, rectBottom)
+                    lineTo(arrowOffsetX, rectBottom + arrowHeight) // Arrow tip
+                    lineTo(arrowOffsetX - arrowWidth / 2, rectBottom)
+                    lineTo(rectLeft + cornerRadius, rectBottom)
+                    quadTo(rectLeft, rectBottom, rectLeft, rectBottom - cornerRadius)
+                    lineTo(rectLeft, rectTop + cornerRadius)
+                    quadTo(rectLeft, rectTop, rectLeft + cornerRadius, rectTop)
+                }
+            }
+
+            close()
+        }
+
+        canvas.drawPath(path, fillPaint)
+        canvas.drawPath(path, borderPaint)
+    }
+
+    override fun getPadding(padding: Rect): Boolean {
+        // Adjust padding based on the arrow position
+        if (arrowPosition == ArrowPosition.TOP) {
+            padding.set(0, arrowHeight.toInt(), 0, 0)
+        } else {
+            padding.set(0, 0, 0, arrowHeight.toInt())
+        }
+        return true
+    }
+
+    override fun setAlpha(alpha: Int) {
+        borderPaint.alpha = alpha
+        fillPaint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        borderPaint.colorFilter = colorFilter
+        fillPaint.colorFilter = colorFilter
+    }
+
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    override fun isStateful(): Boolean = true
+
+//    override fun onStateChange(state: IntArray): Boolean {
+//        val previousPosition = arrowPosition
+//        arrowPosition = if (state?.contains(android.R.attr.state_above_anchor) == true) {
+//            ArrowPosition.TOP
+//        } else {
+//            ArrowPosition.BOTTOM
+//        }
+//        val stateChanged = arrowPosition != previousPosition
+//        if (stateChanged) invalidateSelf()
+//        return stateChanged
+//    }
+}
+
+
+class MainActivity : AppCompatActivity(), DashIndicatorView.OnPageClickListener {
+    private lateinit var viewPager: ViewPager2
+    private lateinit var textView: TextView
+    private lateinit var banner: TextView
+    private lateinit var button: Button
+    private lateinit var adapter: YourAdapter
+    private lateinit var dotsIndicator: DashIndicatorView
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        viewPager = findViewById(R.id.viewpager)
+        textView = findViewById(R.id.textview)
+        banner = findViewById(R.id.banner)
+        button = findViewById(R.id.button)
+        dotsIndicator = findViewById(R.id.dots_indicator)
+
+
+        textView.setOnClickListener {
+            showPopup()
+        }
+
+        val data = List(30) { "Item ${it + 1}" }
+
+        val adapter = CustomPagerAdapter(data)
+        viewPager.adapter = adapter
+
+        dotsIndicator.setNumPages(data.size, 3)
+        dotsIndicator.onPageClickListener = this
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                super.onPageSelected(position)
+                dotsIndicator.setCurrentPage(position)
+            }
+        })
+
+
+    }
+
+    override fun onResume() {
+        super.onResume()
+    }
+
+    private fun showPopup() {
+
+        textView.post {
+            val popupWidth = 300  // Example popup width
+            val popupHeight = 300  // Example popup width
+            val arrowOffsetX = calculateArrowOffset(textView, popupWidth)
+            val anchorX = 950
+// Create popup window
+            val popupWindow = PopupWindow(this).apply {
+                width = popupWidth
+                height = popupHeight
+
+                contentView = LayoutInflater.from(this@MainActivity).inflate(R.layout.layout_popup_content, null)
+
+                // Set dynamic background with arrow
+                val bubbleBackground = createStateListDrawable(textView.getStart(anchorX, popupWidth).toFloat())
+
+                setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                setBackgroundDrawable(bubbleBackground)
+                isOutsideTouchable = true
+                isFocusable = true
+            }
+
+            val location = IntArray(2)
+            textView.getLocationOnScreen(location)
+            findAnchorPosition(popupHeight)
+
+            val arrowHeight = 20f // Replace this with your actual arrow height
+            val borderWidth = 8f  // Replace with your border width
+
+
+
+// Show the popup
+            popupWindow.showAsDropDown(textView, textView.getDropDownStart(anchorX, popupWidth), 0, Gravity.NO_GRAVITY)
+
+
+            lifecycleScope.launch {
+                delay(5000)
+                withContext(Dispatchers.Main) {
+                    banner.visibility = View.VISIBLE
+                }
+            }
+        }
+
+    }
+
+    fun findAnchorPosition(popupHeight: Int): BubbleArrowDrawable.ArrowPosition {
+        val location = IntArray(2)
+        textView.getLocationOnScreen(location)
+        val screenHeight = window.decorView.height
+
+       return if (location[1] + popupHeight + textView.height > screenHeight) {
+            BubbleArrowDrawable.ArrowPosition.BOTTOM
+        } else {
+           BubbleArrowDrawable.ArrowPosition.TOP
+       }
+    }
+
+    fun TextView.getDropDownStart(anchorX: Int, popupWidth: Int): Int {
+        val DEFAULT_MARGIN = resources.getDimensionPixelSize(R.dimen.dimen_24)
+
+        val location = IntArray(2)
+        textView.getLocationOnScreen(location)
+        val screenWidth = window.decorView.width
+        val halfPopupWidth = popupWidth/2
+
+        val data = if (anchorX + halfPopupWidth > screenWidth) {
+            screenWidth - popupWidth - location[0] - DEFAULT_MARGIN
+        } else if (anchorX < halfPopupWidth) {
+            -location[0] + DEFAULT_MARGIN
+        } else {
+            (anchorX - location[0])-halfPopupWidth
+        }
+
+        Log.d("itispk", "data $data and anchor $anchorX")
+        return data
+    }
+
+    fun TextView.getDropDownY(anchorX: Int, popupHeight: Int, arrowPosition: BubbleArrowDrawable.ArrowPosition): Int {
+
+        val data = if (arrowPosition == BubbleArrowDrawable.ArrowPosition.BOTTOM) {
+            -popupHeight + height
+        } else {
+            0
+        }
+        Log.d("itispk", "getDropDownY data $data and anchor $anchorX")
+        return data
+    }
+
+
+    fun TextView.getStart(anchorX: Int, popupWidth: Int): Int {
+        val DEFAULT_MARGIN = resources.getDimensionPixelSize(R.dimen.dimen_24)
+
+        val location = IntArray(2)
+        textView.getLocationOnScreen(location)
+        val screenWidth = window.decorView.width
+        val halfPopupWidth = popupWidth/2
+
+        val data = if (anchorX + halfPopupWidth > screenWidth) {
+            abs(screenWidth - popupWidth - DEFAULT_MARGIN - anchorX)
+        } else if (anchorX < halfPopupWidth) {
+             DEFAULT_MARGIN + anchorX
+        } else {
+            halfPopupWidth
+        }
+
+        Log.d("itispk", " getStart data $data and anchor $anchorX")
+        return data
+    }
+
+
+    override fun onPageClick(position: Int) {
+        Toast.makeText(this, "Clicked on page: $position", Toast.LENGTH_SHORT).show()
+        findViewById<ViewPager2>(R.id.viewpager).currentItem = position
+    }
+
+
+    fun calculateArrowOffset(anchorView: View, popupWidth: Int): Float {
+        val location = IntArray(2)
+        anchorView.getLocationOnScreen(location)
+
+        val anchorCenterX = location[0] + anchorView.width / 2
+        val screenWidth = Resources.getSystem().displayMetrics.widthPixels
+
+        // Ensure the arrow stays within popup bounds
+        return when {
+            anchorCenterX - popupWidth / 2 <= 0 ->  // Left-aligned
+                anchorView.width / 4f
+            anchorCenterX + popupWidth / 2 >= screenWidth ->  // Right-aligned
+                popupWidth - (anchorView.width / 4f)
+            else -> popupWidth / 2f  // Centered
+        }
+    }
+
+    fun createStateListDrawable(arrowOffsetX: Float): StateListDrawable {
+        // Drawable with the arrow on top
+        val arrowTopDrawable = BubbleArrowDrawable(
+            arrowOffsetX = arrowOffsetX,
+            arrowPosition = BubbleArrowDrawable.ArrowPosition.TOP
+        )
+
+        // Drawable with the arrow on bottom
+        val arrowBottomDrawable = BubbleArrowDrawable(
+            arrowOffsetX = arrowOffsetX,
+            arrowPosition = BubbleArrowDrawable.ArrowPosition.BOTTOM
+        )
+
+        // StateListDrawable to switch based on the 'above-anchor' state
+        return StateListDrawable().apply {
+            // When the PopupWindow is above the anchor (state_above_anchor == true)
+            addState(intArrayOf(android.R.attr.state_above_anchor), arrowBottomDrawable)
+
+            // When the PopupWindow is below the anchor
+            addState(intArrayOf(), arrowTopDrawable) // Default state
+        }
+    }
+
+
+
+}
